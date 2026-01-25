@@ -1,0 +1,62 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Radar Zone: Search profile with scoring keywords
+model RadarZone {
+  id             String  @id @default(uuid())
+  name           String  // e.g., "RegTech Manchester"
+  searchTitle    String  @default("") // e.g., "Full Stack Developer"
+  searchLocation String  @default("") // e.g., "Manchester, UK"
+  greenFlags     String  // JSON array of keywords for + scoring
+  redFlags       String  // JSON array of keywords for - scoring
+  active         Boolean @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// Job Lead: Individual job opportunity from the radar
+model JobLead {
+  id          String     @id @default(uuid())
+  title       String
+  companyName String
+  location    String?
+  jobUrl      String     @unique
+  description String?
+  source      String     // "LinkedIn", "Indeed", "Otta"
+  matchScore  Int        @default(0)
+  status      String     @default("RADAR_NEW")
+  priority    Int        @default(3)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  // Relations
+  company   CompanyProfile? @relation(fields: [companyId], references: [id])
+  companyId String?
+}
+
+// Company Profile: Enriched company data
+model CompanyProfile {
+  id              String    @id @default(uuid())
+  companyName     String    @unique
+  companiesHouseId String?
+  industry        String?
+  size            String?
+  website         String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  // Relations
+  jobLeads JobLead[]
+}
+
+// Status values: RADAR_NEW, SHORTLISTED, ARCHIVED, APPLIED, INTERVIEWING
