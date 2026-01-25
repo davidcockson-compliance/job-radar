@@ -6,28 +6,27 @@ services:
     container_name: job-radar-backend
     restart: unless-stopped
     volumes:
-      # Persist SQLite database
-      - ./backend/prisma/dev.db:/usr/src/app/prisma/dev.db
+      # Use a named volume for SQLite data persistence
+      # This prevents the "directory over file" mount error
+      - sqlite_data:/data
       # Persist Uploads
       - ./uploads:/usr/src/app/uploads
     environment:
-      - DATABASE_URL=file:./dev.db
+      # Point Prisma to the persistent volume path
+      - DATABASE_URL=file:/data/dev.db
       - PORT=3001
-      # Tell Puppeteer where to look if needed, but the image handles this usually.
-      # Setting this ensures we use the one installed in the image.
       - PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
+    # Ensure migrations run on startup
+    command: sh -c "npx prisma migrate deploy && npm start"
 
   frontend:
     build: ./frontend
     container_name: job-radar-frontend
     restart: unless-stopped
     ports:
-      # Map container port 80 to host port 8080 (or change as needed)
       - "8080:80"
     depends_on:
       - backend
 
-# Note for Portainer/Ubuntu:
-# 1. Ensure the ./prisma/dev.db file exists on the host before starting, 
-#    or Docker might create it as a directory.
-# 2. Ensure ./uploads folder exists.
+volumes:
+  sqlite_data:
