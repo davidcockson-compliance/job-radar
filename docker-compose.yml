@@ -5,6 +5,8 @@ services:
     build: ./backend
     container_name: job-radar-backend
     restart: unless-stopped
+    # Run as root to fix SQLite volume permissions (pptruser cannot write to /data)
+    user: root
     volumes:
       # Use a named volume for SQLite data persistence
       # This prevents the "directory over file" mount error
