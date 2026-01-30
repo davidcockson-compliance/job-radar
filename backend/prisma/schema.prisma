@@ -18,6 +18,7 @@ model RadarZone {
   searchLocation String  @default("") // e.g., "Manchester, UK"
   greenFlags     String  // JSON array of keywords for + scoring
   redFlags       String  // JSON array of keywords for - scoring
+  enabledSources String  @default("[\"LinkedIn\", \"Indeed\"]") // JSON array of enabled sources
   active         Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -57,6 +58,17 @@ model CompanyProfile {
 
   // Relations
   jobLeads JobLead[]
+}
+
+// Job Source: A website/board that can be searched for jobs
+model JobSource {
+  id        String   @id @default(uuid())
+  name      String   @unique // Display name, e.g. "LinkedIn", "Reed"
+  url       String   @default("") // Base URL of the job board
+  enabled   Boolean  @default(true) // Global on/off toggle
+  builtin   Boolean  @default(false) // True for LinkedIn/Indeed/Otta (have parsers)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // Status values: RADAR_NEW, SHORTLISTED, ARCHIVED, APPLIED, INTERVIEWING

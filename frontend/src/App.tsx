@@ -1,12 +1,13 @@
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
-import { Settings, List, Upload, RefreshCw, ExternalLink, Filter, Kanban, BarChart3, Search } from 'lucide-react'
+import { Settings, List, Upload, RefreshCw, ExternalLink, Filter, Kanban, BarChart3, Search, Globe } from 'lucide-react'
 import { RadarIntake } from './components/RadarIntake'
 import { PreviewPanel } from './components/PreviewPanel'
 import { PipelineView } from './components/PipelineView'
 import { WIBSGenerator } from './components/WIBSGenerator'
 import { StatsView } from './components/StatsView'
 import { ZonesConfig } from './components/ZonesConfig'
+import { SourcesManager } from './components/SourcesManager'
 import { FrogIcon } from './components/FrogIcon'
 
 interface JobLead {
@@ -35,6 +36,8 @@ function App() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('RADAR_NEW')
   const [animatingIds, setAnimatingIds] = useState<Set<string>>(new Set())
   const [wibsLead, setWibsLead] = useState<JobLead | null>(null)
+  const [showSources, setShowSources] = useState(false)
+  const [sourceFilter, setSourceFilter] = useState<string>('all')
 
   const fetchLeads = useCallback(async () => {
     setLoading(true)
@@ -53,11 +56,23 @@ function App() {
     fetchLeads()
   }, [fetchLeads])
 
-  // Filtered leads based on status
+  // Unique sources from leads for filter chips
+  const uniqueSources = useMemo(() => {
+    const sources = new Set(leads.map(l => l.source))
+    return Array.from(sources).sort()
+  }, [leads])
+
+  // Filtered leads based on status and source
   const filteredLeads = useMemo(() => {
-    if (statusFilter === 'all') return leads
-    return leads.filter(l => l.status === statusFilter)
-  }, [leads, statusFilter])
+    let filtered = leads
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(l => l.status === statusFilter)
+    }
+    if (sourceFilter !== 'all') {
+      filtered = filtered.filter(l => l.source === sourceFilter)
+    }
+    return filtered
+  }, [leads, statusFilter, sourceFilter])
 
   // Currently selected lead
   const selectedLead = filteredLeads[selectedIndex] || null
@@ -126,7 +141,7 @@ function App() {
   }, [fetchLeads])
 
   // Hotkeys - only active in feed view
-  const hotkeyOptions = { enabled: view === 'feed' && !showPreview && !wibsLead && !showZones }
+  const hotkeyOptions = { enabled: view === 'feed' && !showPreview && !wibsLead && !showZones && !showSources }
 
   // Navigation
   useHotkeys('up, k', (e) => {
@@ -157,7 +172,8 @@ function App() {
     setShowPreview(false)
     setWibsLead(null)
     setShowZones(false)
-  }, { enabled: showPreview || !!wibsLead || showZones })
+    setShowSources(false)
+  }, { enabled: showPreview || !!wibsLead || showZones || showSources })
 
   useHotkeys('enter, o', () => {
     if (selectedLead) {
@@ -339,6 +355,13 @@ function App() {
                   Refresh
                 </button>
                 <button
+                  onClick={() => setShowSources(true)}
+                  className="flex items-center gap-1.5 rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
+                >
+                  <Globe className="h-3.5 w-3.5" />
+                  Sources
+                </button>
+                <button
                   onClick={() => setShowZones(true)}
                   className="flex items-center gap-1.5 rounded bg-slate-800 px-3 py-1.5 text-sm hover:bg-slate-700"
                 >
@@ -347,6 +370,41 @@ function App() {
                 </button>
               </div>
             </div>
+
+            {/* Source filter */}
+            {uniqueSources.length > 1 && (
+              <div className="mb-3 flex items-center gap-1">
+                <Globe className="mr-2 h-4 w-4 text-slate-500" />
+                <button
+                  onClick={() => setSourceFilter('all')}
+                  className={`rounded px-2.5 py-1 text-sm transition-colors ${
+                    sourceFilter === 'all'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  All Sources
+                </button>
+                {uniqueSources.map(source => (
+                  <button
+                    key={source}
+                    onClick={() => setSourceFilter(source)}
+                    className={`rounded px-2.5 py-1 text-sm transition-colors ${
+                      sourceFilter === source
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white'
+                    }`}
+                  >
+                    {source}
+                    <span className={`ml-1.5 rounded px-1 text-xs ${
+                      sourceFilter === source ? 'bg-emerald-700' : 'bg-slate-700'
+                    }`}>
+                      {leads.filter(l => l.source === source && (statusFilter === 'all' || l.status === statusFilter)).length}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Hotkey legend */}
             <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -517,6 +575,11 @@ function App() {
             fetchLeads() // Refresh leads with new scores
           }}
         />
+      )}
+
+      {/* Sources Manager Modal */}
+      {showSources && (
+        <SourcesManager onClose={() => setShowSources(false)} />
       )}
     </div>
   )

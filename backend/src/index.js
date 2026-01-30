@@ -62,12 +62,28 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json({ limit: '10mb' })); // Large limit for HTML ingestion
 
+// Seed built-in sources on startup
+async function seedBuiltinSources() {
+  const builtins = [
+    { name: 'LinkedIn', url: 'https://www.linkedin.com/jobs', builtin: true, enabled: true },
+    { name: 'Indeed', url: 'https://uk.indeed.com', builtin: true, enabled: true },
+    { name: 'Otta', url: 'https://otta.com', builtin: true, enabled: true },
+  ];
+  for (const src of builtins) {
+    const existing = await prisma.jobSource.findUnique({ where: { name: src.name } });
+    if (!existing) {
+      await prisma.jobSource.create({ data: src });
+    }
+  }
+}
+seedBuiltinSources().catch(console.error);
+
 // Root route
 app.get('/', (req, res) => {
   res.json({
     name: 'FrogHunter API',
     version: '1.0.0',
-    endpoints: ['/api/health', '/api/leads', '/api/radar-zones', '/api/stats']
+    endpoints: ['/api/health', '/api/leads', '/api/radar-zones', '/api/sources', '/api/stats']
   });
 });
 
@@ -86,7 +102,8 @@ app.get('/api/radar-zones', async (req, res) => {
     const parsed = zones.map(z => ({
       ...z,
       greenFlags: JSON.parse(z.greenFlags || '[]'),
-      redFlags: JSON.parse(z.redFlags || '[]')
+      redFlags: JSON.parse(z.redFlags || '[]'),
+      enabledSources: JSON.parse(z.enabledSources || '[]')
     }));
     res.json(parsed);
   } catch (error) {
@@ -97,7 +114,7 @@ app.get('/api/radar-zones', async (req, res) => {
 
 app.post('/api/radar-zones', async (req, res) => {
   try {
-    const { name, searchTitle, searchLocation, greenFlags, redFlags, active } = req.body;
+    const { name, searchTitle, searchLocation, greenFlags, redFlags, enabledSources, active } = req.body;
     const zone = await prisma.radarZone.create({
       data: {
         name,
@@ -105,13 +122,15 @@ app.post('/api/radar-zones', async (req, res) => {
         searchLocation: searchLocation || '',
         greenFlags: JSON.stringify(greenFlags || []),
         redFlags: JSON.stringify(redFlags || []),
+        enabledSources: JSON.stringify(enabledSources || ['LinkedIn', 'Indeed']),
         active: active ?? true
       }
     });
     res.json({
       ...zone,
       greenFlags: JSON.parse(zone.greenFlags),
-      redFlags: JSON.parse(zone.redFlags)
+      redFlags: JSON.parse(zone.redFlags),
+      enabledSources: JSON.parse(zone.enabledSources)
     });
   } catch (error) {
     console.error('Error creating radar zone:', error);
@@ -122,13 +141,14 @@ app.post('/api/radar-zones', async (req, res) => {
 app.patch('/api/radar-zones/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, searchTitle, searchLocation, greenFlags, redFlags, active } = req.body;
+    const { name, searchTitle, searchLocation, greenFlags, redFlags, enabledSources, active } = req.body;
     const data = {};
     if (name !== undefined) data.name = name;
     if (searchTitle !== undefined) data.searchTitle = searchTitle;
     if (searchLocation !== undefined) data.searchLocation = searchLocation;
     if (greenFlags !== undefined) data.greenFlags = JSON.stringify(greenFlags);
     if (redFlags !== undefined) data.redFlags = JSON.stringify(redFlags);
+    if (enabledSources !== undefined) data.enabledSources = JSON.stringify(enabledSources);
     if (active !== undefined) data.active = active;
 
     const zone = await prisma.radarZone.update({
@@ -138,7 +158,8 @@ app.patch('/api/radar-zones/:id', async (req, res) => {
     res.json({
       ...zone,
       greenFlags: JSON.parse(zone.greenFlags),
-      redFlags: JSON.parse(zone.redFlags)
+      redFlags: JSON.parse(zone.redFlags),
+      enabledSources: JSON.parse(zone.enabledSources)
     });
   } catch (error) {
     console.error('Error updating radar zone:', error);
@@ -154,6 +175,84 @@ app.delete('/api/radar-zones/:id', async (req, res) => {
   } catch (error) {
     console.error('Error deleting radar zone:', error);
     res.status(500).json({ error: 'Failed to delete radar zone' });
+  }
+});
+
+// Job Sources API
+app.get('/api/sources', async (req, res) => {
+  try {
+    const sources = await prisma.jobSource.findMany({
+      orderBy: [{ builtin: 'desc' }, { name: 'asc' }]
+    });
+    res.json(sources);
+  } catch (error) {
+    console.error('Error fetching sources:', error);
+    res.status(500).json({ error: 'Failed to fetch sources' });
+  }
+});
+
+app.post('/api/sources', async (req, res) => {
+  try {
+    const { name, url, enabled } = req.body;
+    if (!name || !name.trim()) {
+      return res.status(400).json({ error: 'Source name is required' });
+    }
+    const source = await prisma.jobSource.create({
+      data: {
+        name: name.trim(),
+        url: url || '',
+        enabled: enabled ?? true,
+        builtin: false,
+      }
+    });
+    res.json(source);
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ error: 'A source with that name already exists' });
+    }
+    console.error('Error creating source:', error);
+    res.status(500).json({ error: 'Failed to create source' });
+  }
+});
+
+app.patch('/api/sources/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, url, enabled } = req.body;
+    const data = {};
+    if (name !== undefined) data.name = name.trim();
+    if (url !== undefined) data.url = url;
+    if (enabled !== undefined) data.enabled = enabled;
+
+    const source = await prisma.jobSource.update({
+      where: { id },
+      data
+    });
+    res.json(source);
+  } catch (error) {
+    if (error.code === 'P2002') {
+      return res.status(409).json({ error: 'A source with that name already exists' });
+    }
+    console.error('Error updating source:', error);
+    res.status(500).json({ error: 'Failed to update source' });
+  }
+});
+
+app.delete('/api/sources/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const source = await prisma.jobSource.findUnique({ where: { id } });
+    if (!source) {
+      return res.status(404).json({ error: 'Source not found' });
+    }
+    if (source.builtin) {
+      return res.status(400).json({ error: 'Cannot delete built-in sources. Disable it instead.' });
+    }
+    await prisma.jobSource.delete({ where: { id } });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting source:', error);
+    res.status(500).json({ error: 'Failed to delete source' });
   }
 });
 

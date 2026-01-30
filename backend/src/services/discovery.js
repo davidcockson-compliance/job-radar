@@ -6,20 +6,44 @@ import puppeteer from 'puppeteer';
 /**
  * Generate search URLs for different job boards
  */
-function generateSearchUrls(title, location) {
+function generateSearchUrls(title, location, enabledSources) {
     const encodedTitle = encodeURIComponent(title);
     const encodedLocation = encodeURIComponent(location);
 
-    return [
-        {
+    const sources = [];
+    const enabled = new Set((enabledSources || []).map(s => s.toLowerCase()));
+
+    // Default to all if none specified (legacy support)
+    const useAll = enabled.size === 0;
+
+    if (useAll || enabled.has('linkedin')) {
+        sources.push({
             source: 'LinkedIn',
             url: `https://www.linkedin.com/jobs/search/?keywords=${encodedTitle}&location=${encodedLocation}&f_TPR=r604800` // Past week
-        },
-        {
+        });
+    }
+
+    if (useAll || enabled.has('indeed')) {
+        sources.push({
             source: 'Indeed',
             url: `https://uk.indeed.com/jobs?q=${encodedTitle}&l=${encodedLocation}&fromage=7` // Past week
-        }
-    ];
+        });
+    }
+
+    if (useAll || enabled.has('otta')) {
+        sources.push({
+            source: 'Otta',
+            url: `https://otta.com/jobs/search/${encodedTitle}-in-${encodedLocation}` // Simple approximation, Otta urls are complex
+        });
+    }
+
+    // Add custom sources if any
+    if (!useAll) {
+        // Here we could handle custom URLs if we had a way to store them structure in the future
+        // For now we just stick to the known parsers
+    }
+
+    return sources;
 }
 
 /**
@@ -94,7 +118,14 @@ export async function performDiscoverySweep() {
 
         console.log(`Sweeping for zone: ${zone.name} (${zone.searchTitle} in ${zone.searchLocation})`);
 
-        const searchTasks = generateSearchUrls(zone.searchTitle, zone.searchLocation);
+        let enabledSources = [];
+        try {
+            enabledSources = JSON.parse(zone.enabledSources || '[]');
+        } catch (e) {
+            enabledSources = ['LinkedIn', 'Indeed'];
+        }
+
+        const searchTasks = generateSearchUrls(zone.searchTitle, zone.searchLocation, enabledSources);
 
         for (const task of searchTasks) {
             // Use Puppeteer instead of fetch
