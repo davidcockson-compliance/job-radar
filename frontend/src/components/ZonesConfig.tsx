@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Save, X, Flag, AlertTriangle, RefreshCw } from 'lucide-react'
+import { Plus, Trash2, Save, X, Flag, AlertTriangle, RefreshCw, Globe } from 'lucide-react'
+
+interface TrackedBoards {
+  [source: string]: string[]
+}
 
 interface RadarZone {
   id: string
@@ -9,6 +13,7 @@ interface RadarZone {
   greenFlags: string[]
   redFlags: string[]
   enabledSources: string[]
+  trackedBoards: TrackedBoards
   active: boolean
 }
 
@@ -30,6 +35,7 @@ export function ZonesConfig({ onClose, onSave }: ZonesConfigProps) {
   const [editingZone, setEditingZone] = useState<RadarZone | null>(null)
   const [saving, setSaving] = useState(false)
   const [newFlag, setNewFlag] = useState({ green: '', red: '' })
+  const [newBoardSlug, setNewBoardSlug] = useState<{ [source: string]: string }>({})
 
   useEffect(() => {
     fetchZones()
@@ -69,6 +75,7 @@ export function ZonesConfig({ onClose, onSave }: ZonesConfigProps) {
           greenFlags: [],
           redFlags: [],
           enabledSources: enabledNames,
+          trackedBoards: {},
           active: true,
         }),
       })
@@ -93,6 +100,7 @@ export function ZonesConfig({ onClose, onSave }: ZonesConfigProps) {
           greenFlags: zone.greenFlags,
           redFlags: zone.redFlags,
           enabledSources: zone.enabledSources,
+          trackedBoards: zone.trackedBoards,
           active: zone.active,
         }),
       })
@@ -142,6 +150,33 @@ export function ZonesConfig({ onClose, onSave }: ZonesConfigProps) {
     } else {
       setEditingZone({ ...editingZone, redFlags: editingZone.redFlags.filter((_, i) => i !== index) })
     }
+  }
+
+  const ATS_SOURCES = ['Greenhouse', 'Lever', 'Ashby', 'Rippling'] as const
+
+  const addBoardSlug = (atsSource: string) => {
+    if (!editingZone) return
+    const slug = (newBoardSlug[atsSource] || '').trim().toLowerCase()
+    if (!slug) return
+    const boards = editingZone.trackedBoards || {}
+    const key = atsSource.toLowerCase()
+    const existing = boards[key] || []
+    if (existing.includes(slug)) return
+    setEditingZone({
+      ...editingZone,
+      trackedBoards: { ...boards, [key]: [...existing, slug] }
+    })
+    setNewBoardSlug({ ...newBoardSlug, [atsSource]: '' })
+  }
+
+  const removeBoardSlug = (atsSource: string, slug: string) => {
+    if (!editingZone) return
+    const boards = editingZone.trackedBoards || {}
+    const key = atsSource.toLowerCase()
+    setEditingZone({
+      ...editingZone,
+      trackedBoards: { ...boards, [key]: (boards[key] || []).filter((s: string) => s !== slug) }
+    })
   }
 
   const handleRescore = async () => {
@@ -279,6 +314,65 @@ export function ZonesConfig({ onClose, onSave }: ZonesConfigProps) {
                       <span className="text-xs text-slate-500">No sources enabled. Add sources via the Sources manager.</span>
                     )}
                   </div>
+                </div>
+
+                {/* Tracked Company Boards (ATS sources) */}
+                <div>
+                  <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <Globe className="h-4 w-4 text-blue-400" />
+                    Tracked Company Boards
+                  </div>
+                  <p className="mb-3 text-xs text-slate-500">
+                    Add company slugs for ATS platforms to pull jobs directly from their public APIs. Only sources enabled above will be fetched.
+                  </p>
+                  {ATS_SOURCES.map(atsSource => {
+                    const key = atsSource.toLowerCase()
+                    const isEnabled = (editingZone.enabledSources || []).includes(atsSource)
+                    const slugs = (editingZone.trackedBoards || {})[key] || []
+                    return (
+                      <div key={atsSource} className={`mb-3 rounded-lg border p-3 ${isEnabled ? 'border-slate-600 bg-slate-900/50' : 'border-slate-700 bg-slate-900/20 opacity-50'}`}>
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-sm font-medium">{atsSource}</span>
+                          {!isEnabled && <span className="text-xs text-slate-500">disabled</span>}
+                        </div>
+                        <div className="mb-2 flex flex-wrap gap-1.5">
+                          {slugs.map((slug: string) => (
+                            <span key={slug} className="flex items-center gap-1 rounded-full bg-blue-900/40 px-2.5 py-0.5 text-xs text-blue-300">
+                              {slug}
+                              <button
+                                onClick={() => removeBoardSlug(atsSource, slug)}
+                                className="ml-0.5 hover:text-white"
+                                disabled={!isEnabled}
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                          {slugs.length === 0 && (
+                            <span className="text-xs text-slate-600">No companies tracked</span>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={newBoardSlug[atsSource] || ''}
+                            onChange={(e) => setNewBoardSlug({ ...newBoardSlug, [atsSource]: e.target.value })}
+                            onKeyDown={(e) => e.key === 'Enter' && addBoardSlug(atsSource)}
+                            placeholder="company-slug"
+                            disabled={!isEnabled}
+                            className="flex-1 rounded border border-slate-600 bg-slate-900 px-2 py-1 text-xs focus:border-blue-500 focus:outline-none disabled:opacity-40"
+                          />
+                          <button
+                            onClick={() => addBoardSlug(atsSource)}
+                            disabled={!isEnabled || !(newBoardSlug[atsSource] || '').trim()}
+                            className="rounded bg-blue-700 px-2.5 py-1 text-xs hover:bg-blue-600 disabled:opacity-40"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
 
                 {/* Active Toggle */}

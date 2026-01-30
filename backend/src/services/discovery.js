@@ -1,7 +1,17 @@
 import prisma from '../db.js';
-import { parseJobHtml } from '../parsers/index.js';
+import { parseJobHtml, parseJobJson } from '../parsers/index.js';
 import { scoreJobs } from './scoring.js';
 import puppeteer from 'puppeteer';
+
+/**
+ * ATS API URL templates — {org} is replaced with the company slug
+ */
+const ATS_API_URLS = {
+  greenhouse: 'https://boards-api.greenhouse.io/v1/boards/{org}/jobs',
+  lever: 'https://api.lever.co/v0/postings/{org}',
+  ashby: 'https://api.ashbyhq.com/posting-api/job-board/{org}',
+  rippling: 'https://ats.rippling.com/api/public/board/{org}/jobs',
+};
 
 /**
  * Generate search URLs for different job boards
@@ -98,6 +108,58 @@ async function fetchHtmlWithPuppeteer(url) {
 }
 
 /**
+ * Fetch JSON from a public API endpoint (no auth needed for ATS boards)
+ * @param {string} url
+ * @returns {Promise<object|null>}
+ */
+async function fetchJsonApi(url) {
+    try {
+        console.log(`Fetching JSON API: ${url}`);
+        const res = await fetch(url, {
+            headers: { 'Accept': 'application/json' },
+        });
+        if (!res.ok) {
+            console.log(`API returned ${res.status} for ${url}`);
+            return null;
+        }
+        return await res.json();
+    } catch (error) {
+        console.error(`Error fetching JSON from ${url}:`, error.message);
+        return null;
+    }
+}
+
+/**
+ * Generate ATS API fetch tasks from tracked board configuration
+ * @param {Set<string>} enabledSourcesLower - Set of lowercase enabled source names
+ * @param {object} trackedBoards - e.g. { greenhouse: ['gitlab'], ashby: ['anthropic'] }
+ * @returns {Array<{source: string, org: string, url: string}>}
+ */
+function generateAtsApiTasks(enabledSourcesLower, trackedBoards) {
+    const tasks = [];
+    for (const [atsKey, orgs] of Object.entries(trackedBoards)) {
+        const key = atsKey.toLowerCase();
+        if (!enabledSourcesLower.has(key)) continue;
+        const template = ATS_API_URLS[key];
+        if (!template) continue;
+
+        const orgList = Array.isArray(orgs) ? orgs : [];
+        for (const org of orgList) {
+            const slug = org.trim();
+            if (!slug) continue;
+            // Capitalise source name for display
+            const sourceName = key.charAt(0).toUpperCase() + key.slice(1);
+            tasks.push({
+                source: sourceName,
+                org: slug,
+                url: template.replace('{org}', encodeURIComponent(slug)),
+            });
+        }
+    }
+    return tasks;
+}
+
+/**
  * Perform a discovery sweep for all active radar zones
  */
 export async function performDiscoverySweep() {
@@ -127,8 +189,8 @@ export async function performDiscoverySweep() {
 
         const searchTasks = generateSearchUrls(zone.searchTitle, zone.searchLocation, enabledSources);
 
+        // --- Search-engine sources (LinkedIn, Indeed, Otta) via Puppeteer ---
         for (const task of searchTasks) {
-            // Use Puppeteer instead of fetch
             const html = await fetchHtmlWithPuppeteer(task.url);
 
             if (!html) {
@@ -146,14 +208,67 @@ export async function performDiscoverySweep() {
             for (const job of scoredJobs) {
                 totalProcessed++;
                 try {
-                    // Check if job already exists
                     const existing = await prisma.jobLead.findUnique({
                         where: { jobUrl: job.jobUrl }
                     });
 
                     if (existing) continue;
 
-                    // Create new job lead
+                    await prisma.jobLead.create({
+                        data: {
+                            title: job.title,
+                            companyName: job.companyName,
+                            location: job.location || null,
+                            jobUrl: job.jobUrl,
+                            description: job.description || null,
+                            source: job.source,
+                            matchScore: job.matchScore,
+                            status: 'RADAR_NEW',
+                        }
+                    });
+                    totalNew++;
+                } catch (err) {
+                    if (err.code !== 'P2002') {
+                        console.error('Error saving lead:', err);
+                    }
+                }
+            }
+        }
+
+        // --- ATS API sources (Greenhouse, Lever, Ashby, Rippling) via JSON ---
+        let trackedBoards = {};
+        try {
+            trackedBoards = JSON.parse(zone.trackedBoards || '{}');
+        } catch (e) {
+            trackedBoards = {};
+        }
+
+        const enabledLower = new Set(enabledSources.map(s => s.toLowerCase()));
+        const atsTasks = generateAtsApiTasks(enabledLower, trackedBoards);
+
+        for (const atsTask of atsTasks) {
+            const json = await fetchJsonApi(atsTask.url);
+            if (!json) {
+                console.log(`Failed to fetch API for ${atsTask.source}/${atsTask.org} in zone ${zone.name}`);
+                continue;
+            }
+
+            const parsedJobs = parseJobJson(json, atsTask.source, atsTask.org);
+            console.log(`Parsed ${parsedJobs.length} jobs from ${atsTask.source} (${atsTask.org})`);
+
+            if (parsedJobs.length === 0) continue;
+
+            const scoredJobs = await scoreJobs(parsedJobs);
+
+            for (const job of scoredJobs) {
+                totalProcessed++;
+                try {
+                    const existing = await prisma.jobLead.findUnique({
+                        where: { jobUrl: job.jobUrl }
+                    });
+
+                    if (existing) continue;
+
                     await prisma.jobLead.create({
                         data: {
                             title: job.title,

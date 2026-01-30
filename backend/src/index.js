@@ -68,6 +68,10 @@ async function seedBuiltinSources() {
     { name: 'LinkedIn', url: 'https://www.linkedin.com/jobs', builtin: true, enabled: true },
     { name: 'Indeed', url: 'https://uk.indeed.com', builtin: true, enabled: true },
     { name: 'Otta', url: 'https://otta.com', builtin: true, enabled: true },
+    { name: 'Greenhouse', url: 'https://boards.greenhouse.io', builtin: true, enabled: true },
+    { name: 'Lever', url: 'https://jobs.lever.co', builtin: true, enabled: true },
+    { name: 'Ashby', url: 'https://jobs.ashbyhq.com', builtin: true, enabled: true },
+    { name: 'Rippling', url: 'https://ats.rippling.com', builtin: true, enabled: true },
   ];
   for (const src of builtins) {
     const existing = await prisma.jobSource.findUnique({ where: { name: src.name } });
@@ -103,7 +107,8 @@ app.get('/api/radar-zones', async (req, res) => {
       ...z,
       greenFlags: JSON.parse(z.greenFlags || '[]'),
       redFlags: JSON.parse(z.redFlags || '[]'),
-      enabledSources: JSON.parse(z.enabledSources || '[]')
+      enabledSources: JSON.parse(z.enabledSources || '[]'),
+      trackedBoards: JSON.parse(z.trackedBoards || '{}')
     }));
     res.json(parsed);
   } catch (error) {
@@ -114,7 +119,7 @@ app.get('/api/radar-zones', async (req, res) => {
 
 app.post('/api/radar-zones', async (req, res) => {
   try {
-    const { name, searchTitle, searchLocation, greenFlags, redFlags, enabledSources, active } = req.body;
+    const { name, searchTitle, searchLocation, greenFlags, redFlags, enabledSources, trackedBoards, active } = req.body;
     const zone = await prisma.radarZone.create({
       data: {
         name,
@@ -123,6 +128,7 @@ app.post('/api/radar-zones', async (req, res) => {
         greenFlags: JSON.stringify(greenFlags || []),
         redFlags: JSON.stringify(redFlags || []),
         enabledSources: JSON.stringify(enabledSources || ['LinkedIn', 'Indeed']),
+        trackedBoards: JSON.stringify(trackedBoards || {}),
         active: active ?? true
       }
     });
@@ -130,7 +136,8 @@ app.post('/api/radar-zones', async (req, res) => {
       ...zone,
       greenFlags: JSON.parse(zone.greenFlags),
       redFlags: JSON.parse(zone.redFlags),
-      enabledSources: JSON.parse(zone.enabledSources)
+      enabledSources: JSON.parse(zone.enabledSources),
+      trackedBoards: JSON.parse(zone.trackedBoards)
     });
   } catch (error) {
     console.error('Error creating radar zone:', error);
@@ -141,7 +148,7 @@ app.post('/api/radar-zones', async (req, res) => {
 app.patch('/api/radar-zones/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name, searchTitle, searchLocation, greenFlags, redFlags, enabledSources, active } = req.body;
+    const { name, searchTitle, searchLocation, greenFlags, redFlags, enabledSources, trackedBoards, active } = req.body;
     const data = {};
     if (name !== undefined) data.name = name;
     if (searchTitle !== undefined) data.searchTitle = searchTitle;
@@ -149,6 +156,7 @@ app.patch('/api/radar-zones/:id', async (req, res) => {
     if (greenFlags !== undefined) data.greenFlags = JSON.stringify(greenFlags);
     if (redFlags !== undefined) data.redFlags = JSON.stringify(redFlags);
     if (enabledSources !== undefined) data.enabledSources = JSON.stringify(enabledSources);
+    if (trackedBoards !== undefined) data.trackedBoards = JSON.stringify(trackedBoards);
     if (active !== undefined) data.active = active;
 
     const zone = await prisma.radarZone.update({
@@ -159,7 +167,8 @@ app.patch('/api/radar-zones/:id', async (req, res) => {
       ...zone,
       greenFlags: JSON.parse(zone.greenFlags),
       redFlags: JSON.parse(zone.redFlags),
-      enabledSources: JSON.parse(zone.enabledSources)
+      enabledSources: JSON.parse(zone.enabledSources),
+      trackedBoards: JSON.parse(zone.trackedBoards || '{}')
     });
   } catch (error) {
     console.error('Error updating radar zone:', error);

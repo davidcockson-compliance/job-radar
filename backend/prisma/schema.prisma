@@ -19,6 +19,7 @@ model RadarZone {
   greenFlags     String  // JSON array of keywords for + scoring
   redFlags       String  // JSON array of keywords for - scoring
   enabledSources String  @default("[\"LinkedIn\", \"Indeed\"]") // JSON array of enabled sources
+  trackedBoards  String  @default("{}") // JSON object mapping ATS source to org slugs, e.g. {"greenhouse":["gitlab"],"ashby":["anthropic"]}
   active         Boolean @default(true)
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt

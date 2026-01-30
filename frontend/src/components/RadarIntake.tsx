@@ -17,7 +17,7 @@ interface RadarIntakeProps {
 
 export function RadarIntake({ onIngestComplete }: RadarIntakeProps) {
   const [html, setHtml] = useState('')
-  const [source, setSource] = useState<'auto' | 'LinkedIn' | 'Indeed' | 'Otta'>('auto')
+  const [source, setSource] = useState<'auto' | 'LinkedIn' | 'Indeed' | 'Otta' | 'Greenhouse' | 'Lever' | 'Ashby' | 'Rippling'>('auto')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<IngestResult | null>(null)
 
@@ -65,7 +65,7 @@ export function RadarIntake({ onIngestComplete }: RadarIntakeProps) {
       <div className="mb-4">
         <h3 className="mb-2 text-lg font-semibold">Frog Intake</h3>
         <p className="text-sm text-slate-400">
-          Paste HTML from job search results (LinkedIn, Indeed, or Otta) to scan for opportunities.
+          Paste HTML from job search results to scan for opportunities. Supports job boards (LinkedIn, Indeed, Otta) and ATS platforms (Greenhouse, Lever, Ashby, Rippling).
         </p>
       </div>
 
@@ -73,7 +73,7 @@ export function RadarIntake({ onIngestComplete }: RadarIntakeProps) {
       <div className="mb-4">
         <label className="mb-2 block text-sm font-medium text-slate-300">Source</label>
         <div className="flex gap-2">
-          {(['auto', 'LinkedIn', 'Indeed', 'Otta'] as const).map((s) => (
+          {(['auto', 'LinkedIn', 'Indeed', 'Otta', 'Greenhouse', 'Lever', 'Ashby', 'Rippling'] as const).map((s) => (
             <button
               key={s}
               onClick={() => setSource(s)}

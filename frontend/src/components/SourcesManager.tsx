@@ -90,14 +90,19 @@ export function SourcesManager({ onClose }: SourcesManagerProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="relative max-h-[80vh] w-full max-w-lg overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-2xl">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
-          <div className="flex items-center gap-2">
-            <Globe className="h-5 w-5 text-emerald-400" />
-            <h2 className="text-lg font-semibold">Job Sources</h2>
+        <div className="border-b border-slate-700 px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Globe className="h-5 w-5 text-emerald-400" />
+              <h2 className="text-lg font-semibold">Manage Job Sources</h2>
+            </div>
+            <button onClick={onClose} className="rounded p-1 hover:bg-slate-700">
+              <X className="h-5 w-5" />
+            </button>
           </div>
-          <button onClick={onClose} className="rounded p-1 hover:bg-slate-700">
-            <X className="h-5 w-5" />
-          </button>
+          <p className="mt-1 text-sm text-slate-400">
+            Control which job boards are searched. Toggle sources on or off, or add your own custom sources.
+          </p>
         </div>
 
         {/* Content */}
@@ -108,6 +113,9 @@ export function SourcesManager({ onClose }: SourcesManagerProps) {
             </div>
           ) : (
             <div className="space-y-2">
+              <h3 className="mb-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
+                Active Sources ({sources.filter(s => s.enabled).length} of {sources.length} enabled)
+              </h3>
               {sources.map(source => (
                 <div
                   key={source.id}
@@ -165,7 +173,9 @@ export function SourcesManager({ onClose }: SourcesManagerProps) {
 
               {sources.length === 0 && (
                 <div className="py-8 text-center text-slate-500">
-                  No sources configured
+                  <Globe className="mx-auto mb-2 h-8 w-8 text-slate-600" />
+                  <p className="font-medium">No sources configured</p>
+                  <p className="mt-1 text-xs">Add a job board below to start tracking listings from it.</p>
                 </div>
               )}
             </div>
@@ -173,7 +183,8 @@ export function SourcesManager({ onClose }: SourcesManagerProps) {
 
           {/* Add new source */}
           <div className="mt-4 rounded-lg border border-dashed border-slate-600 p-4">
-            <h3 className="mb-3 text-sm font-medium text-slate-300">Add New Source</h3>
+            <h3 className="mb-1 text-sm font-medium text-slate-300">Add Custom Source</h3>
+            <p className="mb-3 text-xs text-slate-500">Add a job board that isn't built in. The name is used to tag jobs from this source.</p>
             <div className="space-y-2">
               <input
                 type="text"
