@@ -14,9 +14,9 @@ frontend/dist/
 .env.local
 .env.*.local
 
-# Database (Optional: keep dev.db if you want to ship the seed data, but usually ignored)
-# Keeping it un-ignored for now so your deployment has your current zones!
-# backend/prisma/dev.db
+# Database
+*.db
+*.sqlite
 
 # Logs
 npm-debug.log*
